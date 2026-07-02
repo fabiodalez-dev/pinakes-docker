@@ -1,6 +1,10 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/fabiodalez-dev/Pinakes/main/public/assets/brand/logo.png" alt="Pinakes" width="360">
+</p>
+
 # Pinakes — Docker image
 
-Production-ready, single-container Docker image for **[Pinakes](https://github.com/fabiodalez-dev/Pinakes)**, the self-hosted Integrated Library System (ILS).
+Production-ready, single-container Docker image for **[Pinakes](https://github.com/fabiodalez-dev/Pinakes)**, the self-hosted Integrated Library System (ILS) for schools, municipalities, and private collections.
 
 [![Smoke test](https://github.com/fabiodalez-dev/pinakes-docker/actions/workflows/smoke-test.yml/badge.svg)](https://github.com/fabiodalez-dev/pinakes-docker/actions/workflows/smoke-test.yml)
 [![Build & Publish](https://github.com/fabiodalez-dev/pinakes-docker/actions/workflows/build-publish-docker.yml/badge.svg)](https://github.com/fabiodalez-dev/pinakes-docker/actions/workflows/build-publish-docker.yml)
