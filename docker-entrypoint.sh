@@ -71,6 +71,21 @@ mkdir -p \
     "$APP_DIR/public/uploads/events" "$APP_DIR/public/uploads/digital" \
     "$APP_DIR/public/uploads/archives" \
     "$APP_DIR/cache" "$APP_DIR/tmp"
+
+# Re-sync the bundled plugins from the image seed (see Dockerfile). Docker only
+# populates a named 'storage' volume from the image at FIRST creation, and a bind
+# mount hides the image content entirely — so without this an existing volume never
+# receives new/updated bundled plugins on image upgrades, and a bind mount loses
+# them outright. cp -a (no --delete) overwrites the bundled plugins with the image's
+# current copies while leaving any plugins the user installed themselves untouched.
+if [ -d /opt/pinakes/storage-seed/plugins ]; then
+    log "Syncing bundled plugins from image seed…"
+    cp -a /opt/pinakes/storage-seed/plugins/. "$APP_DIR/storage/plugins/"
+fi
+if [ -f /opt/pinakes/storage-seed/.htaccess ] && [ ! -f "$APP_DIR/storage/.htaccess" ]; then
+    cp -a /opt/pinakes/storage-seed/.htaccess "$APP_DIR/storage/.htaccess"
+fi
+
 # Ownership: fix storage/uploads (volume mounts come up root-owned). Skip a full
 # recursive chown of the (large) app tree on every boot — only the writable bits.
 chown -R www-data:www-data \
@@ -135,6 +150,18 @@ else
         ADMIN_NAME="${ADMIN_NAME:-Admin}" ADMIN_SURNAME="${ADMIN_SURNAME:-User}" \
         php /usr/local/lib/pinakes/headless-install.php
 fi
+
+# Port reminder: EXPOSE 80 is only metadata — a `docker run` without -p reaches
+# nothing. The host-side mapping isn't visible from inside the container, so show
+# the example (docker compose already maps ${HTTP_PORT:-8080}:80).
+cat <<'BANNER'
+[entrypoint] ───────────────────────────────────────────────────────────────
+[entrypoint]  Pinakes is listening on container port 80.
+[entrypoint]  Map it to a host port to reach it, e.g.:
+[entrypoint]      docker run -p 8080:80 …   ->   http://localhost:8080
+[entrypoint]  (docker compose already maps the HTTP_PORT you set, default 8080)
+[entrypoint] ───────────────────────────────────────────────────────────────
+BANNER
 
 log "Starting: $*"
 exec "$@"

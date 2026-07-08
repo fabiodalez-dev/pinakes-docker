@@ -9,7 +9,12 @@
 # Apache (not fpm+nginx) is deliberate: upstream prod is Apache-only and the
 # release ships public/.htaccess (mod_rewrite) that works out of the box.
 
-FROM php:8.2-apache AS base
+# Base image is the #1 source of system CVEs: a months-old *-bookworm snapshot
+# drags along dozens of unpatched libs. Track the latest stable PHP on Debian
+# trixie AND dist-upgrade below (the base tag is a snapshot and lags the security
+# archive even when it's "latest"). Bump PHP_IMAGE to move up (e.g. php:8.5-apache-trixie).
+ARG PHP_IMAGE=php:8.4-apache-trixie
+FROM ${PHP_IMAGE} AS base
 
 ARG PINAKES_VERSION=0.7.22
 ENV PINAKES_VERSION=${PINAKES_VERSION}
@@ -28,6 +33,10 @@ LABEL org.opencontainers.image.title="Pinakes ILS" \
 # updater), gd (covers), intl (IntlDateFormatter), opcache (perf).
 RUN set -eux; \
     apt-get update; \
+    # dist-upgrade: the base tag is a point-in-time snapshot and lags behind the
+    # Debian security archive even when it's the latest — pull the current patched
+    # system packages so the published image doesn't ship known-fixed CVEs.
+    apt-get -y dist-upgrade; \
     apt-get install -y --no-install-recommends \
         libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
         libonig-dev libicu-dev \
@@ -60,7 +69,15 @@ RUN set -eux; \
     cp -a "$approot/." /var/www/html/; \
     rm -rf "/tmp/${zipname}" "/tmp/${zipname}.sha256" /tmp/pinakes-extract; \
     # vendor must be production-clean (no phpstan refs) — fail loudly otherwise
-    ! grep -q "phpstan" /var/www/html/vendor/composer/autoload_static.php
+    ! grep -q "phpstan" /var/www/html/vendor/composer/autoload_static.php; \
+    # Seed the bundled plugins to a path OUTSIDE the storage volume. Docker only
+    # populates a named volume from the image ONCE (at first creation), and a bind
+    # mount hides the image content entirely — so without a re-sync the bundled
+    # plugins never update on image upgrades and vanish under a bind mount. The
+    # entrypoint rsyncs this seed into storage/plugins on every boot.
+    mkdir -p /opt/pinakes/storage-seed; \
+    cp -a /var/www/html/storage/plugins /opt/pinakes/storage-seed/plugins; \
+    cp -a /var/www/html/storage/.htaccess /opt/pinakes/storage-seed/.htaccess 2>/dev/null || true
 
 # --- Config + entrypoint + headless installer ------------------------------
 COPY config/php-custom.ini /usr/local/etc/php/conf.d/zz-pinakes.ini
