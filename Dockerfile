@@ -1,4 +1,4 @@
-# Pinakes ILS — single-image Docker build (PHP 8.2 + Apache / mod_php).
+# Pinakes ILS — single-image Docker build (PHP 8.4 + Apache / mod_php).
 #
 # The image is built FROM a published Pinakes *release ZIP* (which already
 # ships vendor/ via composer --no-dev), so the running image is byte-for-byte
@@ -20,14 +20,14 @@ ARG PINAKES_VERSION=0.7.22
 ENV PINAKES_VERSION=${PINAKES_VERSION}
 
 LABEL org.opencontainers.image.title="Pinakes ILS" \
-      org.opencontainers.image.description="Self-hosted Integrated Library System (Pinakes) — Apache + PHP 8.2, headless-installable." \
+      org.opencontainers.image.description="Self-hosted Integrated Library System (Pinakes) — Apache + PHP 8.4, headless-installable." \
       org.opencontainers.image.url="https://github.com/fabiodalez-dev/Pinakes" \
       org.opencontainers.image.source="https://github.com/fabiodalez-dev/pinakes-docker" \
       org.opencontainers.image.licenses="GPL-3.0-only" \
       org.opencontainers.image.version="${PINAKES_VERSION}"
 
 # --- System libraries + PHP extensions -------------------------------------
-# json / curl / openssl / fileinfo are already bundled+enabled in the php:8.2
+# json / curl / openssl / fileinfo are already bundled+enabled in the php:8.4
 # base image — installing them again would error. We add only what Pinakes
 # uses at runtime: mysqli + pdo_mysql (DB), mbstring, zip (uploads/backups/
 # updater), gd (covers), intl (IntlDateFormatter), opcache (perf).
