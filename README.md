@@ -12,7 +12,7 @@ Production-ready, single-container Docker image for **[Pinakes](https://github.c
 
 - **One image, Apache + PHP 8.2** (mod_php) — no separate nginx/fpm container, mirrors the upstream "Apache-only" production target.
 - **Built from the official release ZIP** (which already ships a production `vendor/`), so the running image is byte-for-byte the artifact end users deploy — no source duplication, no Composer at build time.
-- **Headless install** — set `ADMIN_EMAIL` + `ADMIN_PASSWORD` and the container installs Pinakes (schema, locale data, bundled plugins, admin user) on first boot, **no web wizard**. Omit them to fall back to the wizard with the database pre-filled.
+- **Headless install** — set `ADMIN_EMAIL` + `ADMIN_PASSWORD` and the container installs Pinakes (schema, locale data, bundled plugins, admin user) on first boot, **no web wizard**. Omit them and the container creates an empty database and redirects every request to the full web wizard at `/installer/` until the install is completed.
 - **Auto-tracks upstream** — a new Pinakes release automatically rebuilds and republishes this image.
 - Published to **GitHub Container Registry** (`ghcr.io`) and, optionally, **Docker Hub**.
 

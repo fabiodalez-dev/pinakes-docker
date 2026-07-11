@@ -45,38 +45,93 @@ $baseDir = '/var/www/html';
 
 function out(string $msg): void { fwrite(STDOUT, '[docker-migrate] ' . $msg . "\n"); }
 function warn(string $msg): void { fwrite(STDERR, '[docker-migrate] WARNING: ' . $msg . "\n"); }
-function fail(string $msg): void { fwrite(STDERR, '[docker-migrate] ERROR: ' . $msg . "\n"); exit(1); }
 
 $strict = in_array(strtolower((string) getenv('PINAKES_MIGRATE_STRICT')), ['1', 'true', 'yes', 'on'], true);
+
+/**
+ * Hard failure. The boot must NEVER be blocked by this runner unless the
+ * operator opted into strict mode: a transient DB outage (DB_SOCKET setups
+ * skip the entrypoint's wait loop entirely) or an unreadable version.json
+ * would otherwise crash-loop a previously healthy installed instance. The
+ * run is simply retried on the next boot.
+ */
+function bail(string $msg): void
+{
+    global $strict;
+    warn($msg);
+    warn('skipping the migration run for this boot; it will be retried on the next one.');
+    if ($strict) {
+        fwrite(STDERR, "[docker-migrate] ERROR: PINAKES_MIGRATE_STRICT=1 — aborting container start.\n");
+        exit(1);
+    }
+    exit(0);
+}
 
 // ── Target version = the image's version.json ─────────────────────────────
 $versionFile = $baseDir . '/version.json';
 $versionData = is_file($versionFile) ? json_decode((string) file_get_contents($versionFile), true) : null;
 $toVersion = is_array($versionData) ? (string) ($versionData['version'] ?? '') : '';
 if ($toVersion === '') {
-    fail("cannot read app version from {$versionFile}");
+    bail("cannot read app version from {$versionFile}");
 }
 
 // ── App bootstrap (autoloader + __() helper used by Updater messages) ─────
 require $baseDir . '/vendor/autoload.php';
 require $baseDir . '/app/helpers.php';
 
-// ── DB connection from the container environment ──────────────────────────
-$dbHost   = getenv('DB_HOST') ?: 'db';
-$dbPort   = (int) (getenv('DB_PORT') ?: 3306);
-$dbName   = getenv('DB_NAME') ?: 'pinakes';
-$dbUser   = getenv('DB_USER') ?: 'pinakes';
-$dbPass   = getenv('DB_PASS') ?: '';
-$dbSocket = getenv('DB_SOCKET') ?: '';
+// ── DB coordinates: prefer the app's own .env (it may be bind-mounted by ──
+// the operator with coordinates that differ from the container env), fall
+// back to the container environment with the compose defaults.
+$envFileVals = [];
+$envFilePath = $baseDir . '/.env';
+if (is_readable($envFilePath)) {
+    foreach (@file($envFilePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+        if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) {
+            continue;
+        }
+        [$k, $v] = explode('=', $line, 2);
+        $k = trim($k);
+        $v = trim($v);
+        if (strlen($v) >= 2 && ($v[0] === '"' || $v[0] === "'") && $v[-1] === $v[0]) {
+            $v = substr($v, 1, -1);
+        }
+        $envFileVals[$k] = $v;
+    }
+}
+$cfg = static function (string $key, string $default) use ($envFileVals): string {
+    $v = $envFileVals[$key] ?? '';
+    if ($v !== '') {
+        return $v;
+    }
+    $e = getenv($key);
+    return ($e !== false && $e !== '') ? $e : $default;
+};
+
+$dbHost   = $cfg('DB_HOST', 'db');
+$dbPort   = (int) $cfg('DB_PORT', '3306');
+$dbName   = $cfg('DB_NAME', 'pinakes');
+$dbUser   = $cfg('DB_USER', 'pinakes');
+$dbPass   = $cfg('DB_PASS', $cfg('DB_PASSWORD', ''));
+$dbSocket = $cfg('DB_SOCKET', '');
 
 mysqli_report(MYSQLI_REPORT_OFF);
 $db = $dbSocket !== ''
     ? @new mysqli(null, $dbUser, $dbPass, $dbName, 0, $dbSocket)
     : @new mysqli($dbHost, $dbUser, $dbPass, $dbName, $dbPort);
 if ($db->connect_errno) {
-    fail('cannot connect to database: ' . $db->connect_error);
+    bail('cannot connect to database: ' . $db->connect_error);
 }
 $db->set_charset('utf8mb4');
+
+// ── Cross-replica mutex: scaled/rolling deployments share one DB — only ───
+// one container may run migrations at a time. If another replica holds the
+// lock, skip: by the time this replica boots again the stamp is current.
+$lockRow = $db->query("SELECT GET_LOCK('pinakes_docker_migrate', 300)");
+$gotLock = $lockRow !== false && ($lockRow->fetch_row()[0] ?? '0') === '1';
+if (!$gotLock) {
+    warn('another container is running migrations (GET_LOCK timeout) — skipping this boot.');
+    exit(0);
+}
 
 /** Newest version (by version_compare) from a single-column result set. */
 function newestVersion(mysqli $db, string $sql): ?string
@@ -159,7 +214,9 @@ if ($fromVersion === null) {
 }
 
 if ($fromVersion === null) {
-    $v = newestVersion($db, "SELECT to_version FROM update_logs WHERE status = 'success'");
+    // The app's Updater writes status='completed' (ENUM also allows
+    // 'started'/'failed'/'rolled_back'); 'success' kept for belt-and-braces.
+    $v = newestVersion($db, "SELECT to_version FROM update_logs WHERE status IN ('completed', 'success')");
     if ($v !== null) {
         $fromVersion = $v;
         $fromSource  = 'update_logs table';
@@ -211,11 +268,13 @@ if (!($result['success'] ?? false)) {
     warn('fix the underlying problem, or re-run manually:');
     warn('  docker exec <app-container> php /usr/local/lib/pinakes/docker-migrate.php');
     if ($strict) {
-        fail('PINAKES_MIGRATE_STRICT=1 — aborting container start.');
+        fwrite(STDERR, "[docker-migrate] ERROR: PINAKES_MIGRATE_STRICT=1 — aborting container start.\n");
+        exit(1);
     }
     exit(0);
 }
 
 writeStamp($db, $toVersion);
+$db->query("SELECT RELEASE_LOCK('pinakes_docker_migrate')");
 out("✓ schema is now at {$toVersion}.");
 exit(0);
