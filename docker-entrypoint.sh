@@ -172,6 +172,26 @@ if [ -f "$APP_DIR/.installed" ]; then
     fi
 fi
 
+# --- 4c. Background scheduler (supercronic) --------------------------------
+# Docker has no cron daemon, so the automatic notification emails
+# (cron/automatic-notifications.php) and nightly maintenance
+# (cron/full-maintenance.php) never fire on their own — the #1 reason a Docker
+# deployment "never sends any emails". Start supercronic as a background child of
+# the Apache foreground process: it reads /etc/pinakes/crontab and runs the jobs
+# on schedule, logging to the container's stdout/stderr (visible in `docker logs`).
+# Best-effort — if it exits, Apache keeps serving. Runs as www-data so the cron
+# scripts share the web user's ownership of storage/ and .env. Set TZ (compose/env)
+# so the "opening hours" schedule matches your library's local time. Disable with
+# PINAKES_CRON_DISABLED=1 if you drive these scripts from an external scheduler.
+if [ "${PINAKES_CRON_DISABLED:-0}" = "1" ]; then
+    log "Scheduler disabled (PINAKES_CRON_DISABLED=1) — automatic notifications/maintenance will NOT run in-container."
+elif [ -x /usr/local/bin/supercronic ] && [ -f /etc/pinakes/crontab ]; then
+    log "Starting supercronic scheduler (TZ=${TZ:-UTC}); jobs log to container stdout."
+    run_as_www env TZ="${TZ:-UTC}" /usr/local/bin/supercronic -passthrough-logs /etc/pinakes/crontab &
+else
+    log "supercronic binary or crontab missing — scheduler NOT started (automatic emails will not run)."
+fi
+
 # Port reminder: EXPOSE 80 is only metadata — a `docker run` without -p reaches
 # nothing. The host-side mapping isn't visible from inside the container, so show
 # the example (docker compose already maps ${HTTP_PORT:-8080}:80).

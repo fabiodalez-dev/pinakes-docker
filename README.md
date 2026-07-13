@@ -81,6 +81,8 @@ All settings are environment variables (the entrypoint writes the app's `.env` f
 | `APP_DEBUG` / `DISPLAY_ERRORS` | `false` / `false` | Keep `false` in production. |
 | `FORCE_HTTPS` | `false` | Enforce HTTPS/HSTS (TLS detected via `X-Forwarded-Proto`). |
 | `SESSION_LIFETIME` | `3600` | Session lifetime (seconds). |
+| `TZ` | `UTC` | Timezone for the in-container scheduler, so automatic emails fire at your library's local hours (see [Scheduled tasks](#scheduled-tasks)). |
+| `PINAKES_CRON_DISABLED` | `0` | Set to `1` to turn off the in-container scheduler (only if you run the cron scripts externally). |
 | `PLUGIN_ENCRYPTION_KEY` | auto | `base64:<32-byte key>` for encrypted plugin settings. **Set a stable value** so secrets survive container recreation. |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | _(empty)_ | Set **both** for a fully headless install (skips the wizard). |
 | `ADMIN_NAME` / `ADMIN_SURNAME` | `Admin` / `User` | Admin display name. |
@@ -91,6 +93,30 @@ All settings are environment variables (the entrypoint writes the app's `.env` f
 - **Either missing** → everything except the admin user is prepared; you finish the single admin step at `/installer/`.
 
 The install is **idempotent**: on every subsequent boot it detects `.installed` and skips straight to serving.
+
+---
+
+## Scheduled tasks
+
+Pinakes relies on periodic jobs for **automatic notification emails** (due-soon and
+overdue loans) and **nightly maintenance** (loan state transitions, reservation/pickup
+expiry, calendar regeneration). A bare-metal install wires these into the system
+crontab; the container ships its own scheduler ([supercronic](https://github.com/aptible/supercronic))
+so they run out of the box — **no host cron needed.**
+
+| Job | Schedule | What |
+|---|---|---|
+| `cron/automatic-notifications.php` | hourly, 08:00–20:00 | Sends due-soon / overdue notification emails. |
+| `cron/full-maintenance.php` | daily, 06:00 | Loan state transitions, reservation/pickup expiry, notifications, ICS calendar. |
+
+The schedule runs in the container's timezone, so **set `TZ`** (e.g. `TZ=Europe/Berlin`)
+to align the "opening hours" window with your library's local time — otherwise it runs
+in UTC. The jobs log to the container's stdout, so `docker compose logs -f app` shows
+each run. To drive these from an external scheduler instead, set `PINAKES_CRON_DISABLED=1`.
+
+> Emails only send once SMTP is configured under **Settings → Email**. Use the
+> **Send test email** button there to confirm delivery works before relying on the
+> automatic jobs.
 
 ---
 

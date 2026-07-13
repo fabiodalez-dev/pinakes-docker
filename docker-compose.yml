@@ -49,6 +49,11 @@ services:
       DB_PASS: ${DB_PASS:-pinakes}
       APP_ENV: ${APP_ENV:-production}
       APP_LOCALE: ${APP_LOCALE:-it_IT}
+      # Timezone for the in-container scheduler (supercronic) so the automatic
+      # notification/maintenance jobs fire at your library's local hours, not UTC.
+      TZ: ${TZ:-UTC}
+      # Set to 1 only if you run the cron scripts from an external scheduler.
+      PINAKES_CRON_DISABLED: ${PINAKES_CRON_DISABLED:-0}
       APP_CANONICAL_URL: ${APP_CANONICAL_URL:-}
       APP_DEBUG: ${APP_DEBUG:-false}
       DISPLAY_ERRORS: ${DISPLAY_ERRORS:-false}

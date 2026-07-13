@@ -1,0 +1,19 @@
+# Pinakes scheduled tasks — run by supercronic inside the container.
+#
+# Docker images have no cron daemon, so without this the automatic
+# notification emails and nightly maintenance never run. supercronic reads
+# this file and fires the jobs on schedule (see docker-entrypoint.sh).
+#
+# Times are in the CONTAINER's timezone (UTC unless you set TZ in your
+# compose/env). Set TZ to your library's local time so the "opening hours"
+# window below lines up with reality. This mirrors the bare-metal crontab
+# documented in the Pinakes README.
+#
+# Standard 5-field cron:  minute hour day-of-month month day-of-week  command
+#
+# Hourly, 08:00–20:00 — send due-soon and overdue loan notification emails.
+0 8-20 * * * /usr/local/bin/php /var/www/html/cron/automatic-notifications.php
+#
+# Daily at 06:00 — full maintenance: loan state transitions (mark overdue),
+# reservation/pickup expiry, notifications, ICS calendar regeneration.
+0 6 * * * /usr/local/bin/php /var/www/html/cron/full-maintenance.php

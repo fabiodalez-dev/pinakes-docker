@@ -99,6 +99,15 @@ for d in storage storage/sessions storage/logs storage/cache storage/uploads sto
     check "writable: $d" "compose exec -T app sh -c 'test -w /var/www/html/$d'"
 done
 
+echo "── scheduler (supercronic) ──"
+check "supercronic binary present" "compose exec -T app test -x /usr/local/bin/supercronic"
+check "crontab valid" "compose exec -T app supercronic -test /etc/pinakes/crontab"
+check "cron scripts present" "compose exec -T app sh -c 'test -f /var/www/html/cron/automatic-notifications.php && test -f /var/www/html/cron/full-maintenance.php'"
+# The scheduler is launched in the background by the entrypoint; assert it is
+# actually running, so a regression that fails to start it is caught. Read
+# /proc/*/comm directly — no procps (ps/pgrep) needed in the image.
+check "supercronic process running" "compose exec -T app sh -c 'for c in /proc/[0-9]*/comm; do grep -qx supercronic \"\$c\" 2>/dev/null && exit 0; done; exit 1'"
+
 echo ""
 echo "════════════════════════════════════════"
 echo "  PASS=$pass  FAIL=$fail"
