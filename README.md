@@ -112,7 +112,10 @@ so they run out of the box — **no host cron needed.**
 The schedule runs in the container's timezone, so **set `TZ`** (e.g. `TZ=Europe/Berlin`)
 to align the "opening hours" window with your library's local time — otherwise it runs
 in UTC. The jobs log to the container's stdout, so `docker compose logs -f app` shows
-each run. To drive these from an external scheduler instead, set `PINAKES_CRON_DISABLED=1`.
+each run. The scheduler is a required, health-checked process: if it exits unexpectedly,
+the app container exits too and the Compose restart policy starts both processes again.
+To drive these jobs from an external scheduler instead, set `PINAKES_CRON_DISABLED=1`;
+the scheduler health check is then intentionally disabled.
 
 > Emails only send once SMTP is configured under **Settings → Email**. Use the
 > **Send test email** button there to confirm delivery works before relying on the

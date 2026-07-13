@@ -132,9 +132,12 @@ RUN set -eux; \
 
 WORKDIR /var/www/html
 
-# HTTP-based healthcheck: Apache+mod_php serves directly, so a 200/302 on / means alive.
+# Both required services must be alive: without supercronic the web UI still works
+# but automatic loan emails silently stop. External-scheduler deployments opt out
+# explicitly with PINAKES_CRON_DISABLED=1.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=90s --retries=5 \
-  CMD curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1/ | grep -qE '^(200|302)$' || exit 1
+  CMD ( [ "${PINAKES_CRON_DISABLED:-0}" = "1" ] || grep -qsx supercronic /proc/[0-9]*/comm ) && \
+      curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1/ | grep -qE '^(200|302)$' || exit 1
 
 EXPOSE 80
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
