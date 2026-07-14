@@ -41,6 +41,7 @@ DB_PASS=smokepass123
 DB_ROOT_PASS=smokeroot123
 APP_ENV=production
 APP_LOCALE=it_IT
+APP_CANONICAL_URL=http://localhost:${HTTP_PORT}
 PLUGIN_ENCRYPTION_KEY=base64:c21va2VrZXlzbW9rZWtleXNtb2tla2V5c21rMTIzNDU2Nzg=
 ADMIN_EMAIL=admin@smoke.test
 ADMIN_PASSWORD=SmokeAdmin123!

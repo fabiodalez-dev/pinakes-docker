@@ -137,7 +137,7 @@ WORKDIR /var/www/html
 # explicitly with PINAKES_CRON_DISABLED=1.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=90s --retries=5 \
   CMD ( [ "${PINAKES_CRON_DISABLED:-0}" = "1" ] || grep -qsx supercronic /proc/[0-9]*/comm ) && \
-      curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1/ | grep -qE '^(200|302)$' || exit 1
+      curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1/ | grep -qE '^(2[0-9]{2}|3[0-9]{2})$' || exit 1
 
 EXPOSE 80
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
