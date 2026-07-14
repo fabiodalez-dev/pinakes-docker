@@ -174,16 +174,16 @@ if [ -f "$APP_DIR/.installed" ]; then
 fi
 
 # --- 4c. Scheduler (supercronic) -------------------------------------------
-# Docker has no cron daemon, so the automatic notification emails
+# Docker has no cron daemon, so the automatic email/mobile push notifications
 # (cron/automatic-notifications.php) and nightly maintenance
 # (cron/full-maintenance.php) never fire on their own — the #1 reason a Docker
-# deployment "never sends any emails". supercronic reads /etc/pinakes/crontab and
+# deployment "never sends any notifications". supercronic reads /etc/pinakes/crontab and
 # runs the jobs on schedule, logging to the container's stdout/stderr (visible in
 # `docker logs`). It runs as www-data so the cron scripts share the web user's
 # ownership of storage/ and .env. The final supervisor below treats it as a required
 # process: an unexpected scheduler exit stops the main process and lets Docker's
 # restart policy recover the whole container instead of serving indefinitely with
-# no automatic emails. Set TZ (compose/env) so the schedule matches the library's
+# no automatic notifications. Set TZ (compose/env) so the schedule matches the library's
 # local time. Disable with PINAKES_CRON_DISABLED=1 only when an external scheduler
 # owns these jobs.
 scheduler_pid=""

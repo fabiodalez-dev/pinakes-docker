@@ -98,15 +98,15 @@ The install is **idempotent**: on every subsequent boot it detects `.installed` 
 
 ## Scheduled tasks
 
-Pinakes relies on periodic jobs for **automatic notification emails** (due-soon and
-overdue loans) and **nightly maintenance** (loan state transitions, reservation/pickup
+Pinakes relies on periodic jobs for **automatic email and mobile push notifications**
+(due-soon and overdue loans) and **nightly maintenance** (loan state transitions, reservation/pickup
 expiry, calendar regeneration). A bare-metal install wires these into the system
 crontab; the container ships its own scheduler ([supercronic](https://github.com/aptible/supercronic))
 so they run out of the box — **no host cron needed.**
 
 | Job | Schedule | What |
 |---|---|---|
-| `cron/automatic-notifications.php` | hourly, 08:00–20:00 | Sends due-soon / overdue notification emails. |
+| `cron/automatic-notifications.php` | hourly, 08:00–20:00 | Sends due-soon / overdue emails and dispatches mobile push notifications. |
 | `cron/full-maintenance.php` | daily, 06:00 | Loan state transitions, reservation/pickup expiry, notifications, ICS calendar. |
 
 The schedule runs in the container's timezone, so **set `TZ`** (e.g. `TZ=Europe/Berlin`)
