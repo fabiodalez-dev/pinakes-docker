@@ -41,6 +41,7 @@ DB_PASS=smokepass123
 DB_ROOT_PASS=smokeroot123
 APP_ENV=production
 APP_LOCALE=it_IT
+APP_CANONICAL_URL=http://localhost:${HTTP_PORT}
 PLUGIN_ENCRYPTION_KEY=base64:c21va2VrZXlzbW9rZWtleXNtb2tla2V5c21rMTIzNDU2Nzg=
 ADMIN_EMAIL=admin@smoke.test
 ADMIN_PASSWORD=SmokeAdmin123!
@@ -98,6 +99,57 @@ echo "── writable runtime dirs ──"
 for d in storage storage/sessions storage/logs storage/cache storage/uploads storage/plugins public/uploads/copertine; do
     check "writable: $d" "compose exec -T app sh -c 'test -w /var/www/html/$d'"
 done
+
+echo "── scheduler (supercronic) ──"
+check "supercronic binary present" "compose exec -T app test -x /usr/local/bin/supercronic"
+check "crontab valid" "compose exec -T app supercronic -test /etc/pinakes/crontab"
+check "cron scripts present" "compose exec -T app sh -c 'test -f /var/www/html/cron/automatic-notifications.php && test -f /var/www/html/cron/full-maintenance.php'"
+# The scheduler is launched in the background by the entrypoint; assert it is
+# actually running, so a regression that fails to start it is caught. Read
+# /proc/*/comm directly — no procps (ps/pgrep) needed in the image.
+check "supercronic process running" "compose exec -T app sh -c 'for c in /proc/[0-9]*/comm; do grep -qx supercronic \"\$c\" 2>/dev/null && exit 0; done; exit 1'"
+
+echo "── scheduler supervision ──"
+restart_before="$(docker inspect --format '{{.RestartCount}}' "${PROJECT}-app-1")"
+if compose exec -T app sh -c 'for c in /proc/[0-9]*/comm; do if grep -qx supercronic "$c" 2>/dev/null; then pid=${c#/proc/}; pid=${pid%/comm}; kill -TERM "$pid"; exit 0; fi; done; exit 1'; then
+    ok "scheduler can be terminated for supervision test"
+else
+    ko "scheduler can be terminated for supervision test"
+fi
+
+recovered=0
+for _ in $(seq 1 30); do
+    restart_after="$(docker inspect --format '{{.RestartCount}}' "${PROJECT}-app-1" 2>/dev/null || echo 0)"
+    health_after="$(docker inspect --format '{{.State.Health.Status}}' "${PROJECT}-app-1" 2>/dev/null || echo unknown)"
+    if [ "${restart_after:-0}" -gt "${restart_before:-0}" ] 2>/dev/null \
+       && [ "$health_after" = "healthy" ] \
+       && compose exec -T app sh -c 'grep -qsx supercronic /proc/[0-9]*/comm' 2>/dev/null; then
+        recovered=1
+        break
+    fi
+    sleep 2
+done
+if [ "$recovered" = "1" ]; then
+    ok "scheduler crash restarts container and recovers healthy"
+else
+    ko "scheduler crash restarts container and recovers healthy"
+    compose logs app | tail -60
+fi
+
+echo "── external-scheduler opt-out ──"
+PINAKES_CRON_DISABLED=1 compose --env-file "$ROOT/.env.smoke" up -d --force-recreate app >/dev/null
+disabled_healthy=0
+for _ in $(seq 1 30); do
+    disabled_health="$(docker inspect --format '{{.State.Health.Status}}' "${PROJECT}-app-1" 2>/dev/null || echo unknown)"
+    [ "$disabled_health" = "healthy" ] && { disabled_healthy=1; break; }
+    sleep 2
+done
+if [ "$disabled_healthy" = "1" ]; then
+    ok "PINAKES_CRON_DISABLED=1 remains healthy"
+else
+    ko "PINAKES_CRON_DISABLED=1 remains healthy"
+fi
+check "disabled scheduler has no supercronic process" "! compose exec -T app sh -c 'grep -qsx supercronic /proc/[0-9]*/comm'"
 
 echo ""
 echo "════════════════════════════════════════"

@@ -40,7 +40,8 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends \
         libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
         libonig-dev libicu-dev \
-        unzip curl default-mysql-client; \
+        unzip curl default-mysql-client \
+        tzdata; \
     docker-php-ext-configure gd --with-freetype --with-jpeg; \
     docker-php-ext-install -j"$(nproc)" mysqli pdo_mysql mbstring zip gd intl opcache; \
     a2enmod rewrite headers expires deflate; \
@@ -79,6 +80,27 @@ RUN set -eux; \
     cp -a /var/www/html/storage/plugins /opt/pinakes/storage-seed/plugins; \
     cp -a /var/www/html/storage/.htaccess /opt/pinakes/storage-seed/.htaccess 2>/dev/null || true
 
+# --- Scheduler (supercronic) -----------------------------------------------
+# Docker images have no cron daemon, so the automatic loan/notification emails
+# (cron/automatic-notifications.php) and nightly maintenance
+# (cron/full-maintenance.php) would never run. supercronic is a container-native
+# cron: single static binary, logs to stdout, no daemon, respects $TZ. The binary
+# is pinned + checksum-verified per target arch (checksums computed from the
+# official v0.2.47 release assets). TARGETARCH is injected by buildx.
+ARG TARGETARCH
+ARG SUPERCRONIC_VERSION=v0.2.47
+RUN set -eux; \
+    case "${TARGETARCH:-amd64}" in \
+      amd64) sc_arch=amd64; sc_sha=dcb1403c188a9438c47d4bba82a9c357fc9351ce91627fb2bae627f0f5becfc4 ;; \
+      arm64) sc_arch=arm64; sc_sha=e1124aa34294e2bb8ab7002f347f4363ba35097f3daf4d3c44e9d813c1fb2bb8 ;; \
+      *) echo "Unsupported TARGETARCH for supercronic: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    curl -fSL "https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-${sc_arch}" \
+        -o /usr/local/bin/supercronic; \
+    echo "${sc_sha}  /usr/local/bin/supercronic" | sha256sum -c -; \
+    chmod +x /usr/local/bin/supercronic
+COPY config/pinakes-crontab /etc/pinakes/crontab
+
 # --- Config + entrypoint + headless installer ------------------------------
 COPY config/php-custom.ini /usr/local/etc/php/conf.d/zz-pinakes.ini
 COPY config/apache-pinakes.conf /etc/apache2/sites-available/000-default.conf
@@ -110,9 +132,12 @@ RUN set -eux; \
 
 WORKDIR /var/www/html
 
-# HTTP-based healthcheck: Apache+mod_php serves directly, so a 200/302 on / means alive.
+# Both required services must be alive: without supercronic the web UI still works
+# but automatic loan emails silently stop. External-scheduler deployments opt out
+# explicitly with PINAKES_CRON_DISABLED=1.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=90s --retries=5 \
-  CMD curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1/ | grep -qE '^(200|302)$' || exit 1
+  CMD ( [ "${PINAKES_CRON_DISABLED:-0}" = "1" ] || grep -qsx supercronic /proc/[0-9]*/comm ) && \
+      curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1/ | grep -qE '^(2[0-9]{2}|3[0-9]{2})$' || exit 1
 
 EXPOSE 80
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

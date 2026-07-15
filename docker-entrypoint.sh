@@ -4,7 +4,8 @@
 #   2. Ensure writable runtime dirs exist on mounted volumes + fix ownership.
 #   3. Wait for the database to accept authenticated connections.
 #   4. Run the headless installer (as www-data) unless already installed.
-#   5. Hand off to Apache (or the passed CMD).
+#   5. Start and supervise the in-container scheduler (unless disabled).
+#   6. Run Apache (or the passed CMD).
 set -euo pipefail
 
 APP_DIR=/var/www/html
@@ -172,6 +173,31 @@ if [ -f "$APP_DIR/.installed" ]; then
     fi
 fi
 
+# --- 4c. Scheduler (supercronic) -------------------------------------------
+# Docker has no cron daemon, so the automatic email/mobile push notifications
+# (cron/automatic-notifications.php) and nightly maintenance
+# (cron/full-maintenance.php) never fire on their own — the #1 reason a Docker
+# deployment "never sends any notifications". supercronic reads /etc/pinakes/crontab and
+# runs the jobs on schedule, logging to the container's stdout/stderr (visible in
+# `docker logs`). It runs as www-data so the cron scripts share the web user's
+# ownership of storage/ and .env. The final supervisor below treats it as a required
+# process: an unexpected scheduler exit stops the main process and lets Docker's
+# restart policy recover the whole container instead of serving indefinitely with
+# no automatic notifications. Set TZ (compose/env) so the schedule matches the library's
+# local time. Disable with PINAKES_CRON_DISABLED=1 only when an external scheduler
+# owns these jobs.
+scheduler_pid=""
+if [ "${PINAKES_CRON_DISABLED:-0}" = "1" ]; then
+    log "Scheduler disabled (PINAKES_CRON_DISABLED=1) — automatic notifications/maintenance will NOT run in-container."
+elif [ -x /usr/local/bin/supercronic ] && [ -f /etc/pinakes/crontab ]; then
+    log "Starting supercronic scheduler (TZ=${TZ:-UTC}); jobs log to container stdout."
+    run_as_www env TZ="${TZ:-UTC}" /usr/local/bin/supercronic -passthrough-logs /etc/pinakes/crontab &
+    scheduler_pid=$!
+else
+    log "supercronic binary or crontab missing — refusing to start without automatic notifications (set PINAKES_CRON_DISABLED=1 only if scheduled externally)."
+    exit 1
+fi
+
 # Port reminder: EXPOSE 80 is only metadata — a `docker run` without -p reaches
 # nothing. The host-side mapping isn't visible from inside the container, so show
 # the example (docker compose already maps ${HTTP_PORT:-8080}:80).
@@ -185,4 +211,52 @@ cat <<'BANNER'
 BANNER
 
 log "Starting: $*"
-exec "$@"
+
+# With the scheduler explicitly disabled there is only one long-running process,
+# so preserve the usual container behaviour and make the requested command PID 1.
+if [ -z "$scheduler_pid" ]; then
+    exec "$@"
+fi
+
+# Bash remains PID 1 only when it has two required children to supervise. Forward
+# stop signals to both, reap them, and fail the container if supercronic exits while
+# the application is still running. docker-compose.yml's restart policy then starts
+# a fresh scheduler and application together.
+"$@" &
+app_pid=$!
+shutdown_requested=0
+
+forward_shutdown() {
+    shutdown_requested=1
+    kill -TERM "$app_pid" "$scheduler_pid" 2>/dev/null || true
+}
+trap forward_shutdown TERM INT
+
+set +e
+wait -n "$app_pid" "$scheduler_pid"
+first_status=$?
+set -e
+
+if [ "$shutdown_requested" -eq 1 ]; then
+    set +e
+    wait "$app_pid" 2>/dev/null
+    wait "$scheduler_pid" 2>/dev/null
+    set -e
+    exit 0
+fi
+
+if ! kill -0 "$scheduler_pid" 2>/dev/null; then
+    log "Scheduler exited unexpectedly — stopping the application so Docker can restart the container."
+    kill -TERM "$app_pid" 2>/dev/null || true
+    set +e
+    wait "$app_pid" 2>/dev/null
+    set -e
+    exit 1
+fi
+
+log "Main process exited with status ${first_status} — stopping the scheduler."
+kill -TERM "$scheduler_pid" 2>/dev/null || true
+set +e
+wait "$scheduler_pid" 2>/dev/null
+set -e
+exit "$first_status"
