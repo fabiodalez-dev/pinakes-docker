@@ -40,6 +40,11 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends \
         libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
         libonig-dev libicu-dev \
+        # NOTE: the `curl` CLI binary is REQUIRED (not just PHP's curl ext):
+        # the Open Library plugin shells out to it to fetch Goodreads cover
+        # pages, whose Cloudflare anti-bot serves a 202 to PHP's HTTP client
+        # but 200 to the system curl. shell_exec must also stay enabled. Do
+        # not drop `curl` when slimming the image.
         unzip curl default-mysql-client \
         tzdata; \
     docker-php-ext-configure gd --with-freetype --with-jpeg; \
