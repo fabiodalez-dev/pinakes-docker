@@ -126,7 +126,7 @@ the scheduler health check is then intentionally disabled.
 
 ## Persistence
 
-Three things must outlive the container:
+Four things must outlive the container:
 
 | Path | What |
 |---|---|
