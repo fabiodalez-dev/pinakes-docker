@@ -57,6 +57,7 @@ docker run -d --name pinakes -p 8080:80 \
   -e PLUGIN_ENCRYPTION_KEY="base64:$(openssl rand -base64 32)" \
   -v pinakes_storage:/var/www/html/storage \
   -v pinakes_uploads:/var/www/html/public/uploads \
+  -v pinakes_locale:/var/www/html/locale \
   fabiodalez/pinakes:latest
 ```
 
@@ -132,14 +133,15 @@ Three things must outlive the container:
 | `db_data` → `/var/lib/mysql` | the database |
 | `storage` → `/var/www/html/storage` | logs, cache, backups, sessions, plugin state |
 | `uploads` → `/var/www/html/public/uploads` | book covers, author images, digital assets |
+| `locale` → `/var/www/html/locale` | translations — drop custom/additional `*.json` here and they survive image upgrades (the shipped files are re-seeded on every boot) |
 
-The provided `docker-compose.yml` wires named volumes for all three. Also keep a **stable `PLUGIN_ENCRYPTION_KEY`** (in `.env`) so encrypted plugin settings remain readable after a recreate.
+The provided `docker-compose.yml` wires named volumes for all four. Also keep a **stable `PLUGIN_ENCRYPTION_KEY`** (in `.env`) so encrypted plugin settings remain readable after a recreate.
 
 ---
 
 ## Updating
 
-The recommended way to update on Docker is to **move the container to the new image** — your data lives in the database and in the `storage`/`uploads` volumes, so it survives the swap:
+The recommended way to update on Docker is to **move the container to the new image** — your data lives in the database and in the `storage`/`uploads`/`locale` volumes, so it survives the swap (custom translations included):
 
 ```bash
 # pin a version

@@ -69,8 +69,12 @@ services:
     volumes:
       - storage:/var/www/html/storage
       - uploads:/var/www/html/public/uploads
+      # Persist translations: custom/additional locale files added here survive
+      # image upgrades. The entrypoint re-seeds the shipped files on every boot.
+      - locale:/var/www/html/locale
 
 volumes:
   db_data:
   storage:
   uploads:
+  locale:
