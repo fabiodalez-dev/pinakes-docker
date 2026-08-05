@@ -92,11 +92,17 @@ fi
 # plugins above): the locale/ dir is a persistent volume so custom translations
 # survive upgrades, but that means an existing volume never receives new/updated
 # shipped translations on an image upgrade. cp -a (no --delete) refreshes the
-# shipped files while leaving any locale files the user added themselves intact.
+# shipped top-level *.json while leaving user-added locale files intact.
+#
+# In-app edits of a SHIPPED locale are written by the app to locale/overrides/
+# (never part of the seed), so this refresh never touches them and the app merges
+# them back on top at runtime (Pinakes >= 0.7.55). Ensure the dir exists so the
+# override survives from first boot even before the first edit.
 if [ -d /opt/pinakes/locale-seed ]; then
     log "Syncing bundled locale files from image seed…"
     cp -a /opt/pinakes/locale-seed/. "$APP_DIR/locale/"
 fi
+mkdir -p "$APP_DIR/locale/overrides"
 
 # Ownership: fix storage/uploads (volume mounts come up root-owned). Skip a full
 # recursive chown of the (large) app tree on every boot — only the writable bits.

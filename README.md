@@ -137,7 +137,7 @@ Four things must outlive the container:
 
 The provided `docker-compose.yml` wires named volumes for all four. Also keep a **stable `PLUGIN_ENCRYPTION_KEY`** (in `.env`) so encrypted plugin settings remain readable after a recreate.
 
-> **Do not edit a *shipped* translation file in place** (e.g. `it_IT.json`). Shipped files are re-seeded from the image on every boot — so an in-place edit (including one saved from the in-app language editor) reverts on the next restart. Add extra or overriding languages as **new** `*.json` files with distinct names; those persist untouched. (An in-place edit is recoverable meanwhile: the app leaves a `*.json.backup.<timestamp>` next to it.)
+> **Translations survive image upgrades.** The shipped `*.json` are re-seeded from the image on every boot (so updated translations reach existing volumes). In-app edits of a shipped locale are stored separately under `locale/overrides/` — **not** re-seeded — and the app merges them back on top at runtime (Pinakes ≥ 0.7.55), so your edits persist while updated shipped strings still flow through. Brand-new custom languages you drop into `locale/` as new files also persist untouched.
 
 ---
 
