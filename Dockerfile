@@ -83,7 +83,12 @@ RUN set -eux; \
     # entrypoint rsyncs this seed into storage/plugins on every boot.
     mkdir -p /opt/pinakes/storage-seed; \
     cp -a /var/www/html/storage/plugins /opt/pinakes/storage-seed/plugins; \
-    cp -a /var/www/html/storage/.htaccess /opt/pinakes/storage-seed/.htaccess 2>/dev/null || true
+    cp -a /var/www/html/storage/.htaccess /opt/pinakes/storage-seed/.htaccess 2>/dev/null || true; \
+    # Seed the bundled locale files the same way (they live in a persistent
+    # volume so custom/additional translations survive image upgrades). The
+    # entrypoint re-syncs the shipped files on every boot WITHOUT deleting any
+    # the user added, so both stay: shipped ones refresh, custom ones persist.
+    cp -a /var/www/html/locale /opt/pinakes/locale-seed
 
 # --- Scheduler (supercronic) -----------------------------------------------
 # Docker images have no cron daemon, so the automatic loan/notification emails

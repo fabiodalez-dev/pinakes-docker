@@ -71,6 +71,7 @@ mkdir -p \
     "$APP_DIR/public/uploads/copertine" "$APP_DIR/public/uploads/autori" \
     "$APP_DIR/public/uploads/events" "$APP_DIR/public/uploads/digital" \
     "$APP_DIR/public/uploads/archives" \
+    "$APP_DIR/locale" \
     "$APP_DIR/cache" "$APP_DIR/tmp"
 
 # Re-sync the bundled plugins from the image seed (see Dockerfile). Docker only
@@ -87,10 +88,20 @@ if [ -f /opt/pinakes/storage-seed/.htaccess ] && [ ! -f "$APP_DIR/storage/.htacc
     cp -a /opt/pinakes/storage-seed/.htaccess "$APP_DIR/storage/.htaccess"
 fi
 
+# Re-sync the bundled locale files from the image seed (same rationale as the
+# plugins above): the locale/ dir is a persistent volume so custom translations
+# survive upgrades, but that means an existing volume never receives new/updated
+# shipped translations on an image upgrade. cp -a (no --delete) refreshes the
+# shipped files while leaving any locale files the user added themselves intact.
+if [ -d /opt/pinakes/locale-seed ]; then
+    log "Syncing bundled locale files from image seed…"
+    cp -a /opt/pinakes/locale-seed/. "$APP_DIR/locale/"
+fi
+
 # Ownership: fix storage/uploads (volume mounts come up root-owned). Skip a full
 # recursive chown of the (large) app tree on every boot — only the writable bits.
 chown -R www-data:www-data \
-    "$APP_DIR/storage" "$APP_DIR/public/uploads" "$APP_DIR/cache" "$APP_DIR/tmp" 2>/dev/null || true
+    "$APP_DIR/storage" "$APP_DIR/public/uploads" "$APP_DIR/locale" "$APP_DIR/cache" "$APP_DIR/tmp" 2>/dev/null || true
 
 # --- 3. Wait for the database ----------------------------------------------
 if [ -z "$DB_SOCKET" ]; then
