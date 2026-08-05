@@ -98,11 +98,16 @@ fi
 # (never part of the seed), so this refresh never touches them and the app merges
 # them back on top at runtime (Pinakes >= 0.7.55). Ensure the dir exists so the
 # override survives from first boot even before the first edit.
+mkdir -p "$APP_DIR/locale/overrides"
 if [ -d /opt/pinakes/locale-seed ]; then
     log "Syncing bundled locale files from image seed…"
-    cp -a /opt/pinakes/locale-seed/. "$APP_DIR/locale/"
+    # Copy only the first-level shipped *.json — never recurse into
+    # subdirectories, so a persistent locale/overrides/ can never be clobbered.
+    for locale_file in /opt/pinakes/locale-seed/*.json; do
+        [ -f "$locale_file" ] || continue
+        cp -a "$locale_file" "$APP_DIR/locale/"
+    done
 fi
-mkdir -p "$APP_DIR/locale/overrides"
 
 # Ownership: fix storage/uploads (volume mounts come up root-owned). Skip a full
 # recursive chown of the (large) app tree on every boot — only the writable bits.
