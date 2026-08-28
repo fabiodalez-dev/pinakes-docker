@@ -15,9 +15,15 @@ services:
       MYSQL_DATABASE: ${DB_NAME:-pinakes}
       MYSQL_USER: ${DB_USER:-pinakes}
       MYSQL_PASSWORD: ${DB_PASS:-pinakes}
+    # log-bin-trust-function-creators: MySQL 8.0 enables the binary log by
+    # default, and the unprivileged app user (no SUPER) then cannot run the
+    # CREATE TRIGGER statements the installer imports — leaving every install
+    # with 0 triggers (loan-overlap prevention + soft-delete cascades silently
+    # missing). This flag lets a non-SUPER user create them without binlog risk.
     command: >
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
+      --log-bin-trust-function-creators=1
     volumes:
       - db_data:/var/lib/mysql
     healthcheck:
