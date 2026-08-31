@@ -64,6 +64,9 @@ services:
       APP_DEBUG: ${APP_DEBUG:-false}
       DISPLAY_ERRORS: ${DISPLAY_ERRORS:-false}
       FORCE_HTTPS: ${FORCE_HTTPS:-false}
+      # Comma-separated exact IPs/CIDRs of reverse proxies that overwrite
+      # X-Forwarded-For. Empty is the secure default for direct HTTP access.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       SESSION_LIFETIME: ${SESSION_LIFETIME:-3600}
       # Set a stable key in .env for production (openssl rand -base64 32).
       PLUGIN_ENCRYPTION_KEY: ${PLUGIN_ENCRYPTION_KEY:-}

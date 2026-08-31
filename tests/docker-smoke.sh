@@ -42,6 +42,7 @@ DB_ROOT_PASS=smokeroot123
 APP_ENV=production
 APP_LOCALE=it_IT
 APP_CANONICAL_URL=http://localhost:${HTTP_PORT}
+TRUSTED_PROXIES=172.21.0.0/16,192.168.1.10
 PLUGIN_ENCRYPTION_KEY=base64:c21va2VrZXlzbW9rZWtleXNtb2tla2V5c21rMTIzNDU2Nzg=
 ADMIN_EMAIL=admin@smoke.test
 ADMIN_PASSWORD=SmokeAdmin123!
@@ -75,6 +76,7 @@ done
 check "php ext: opcache" "echo \"$mods\" | grep -qi 'opcache'"
 check "upload_max_filesize=512M" "compose exec -T app php -r 'exit(ini_get(\"upload_max_filesize\")===\"512M\"?0:1);'"
 check "display_errors Off"        "compose exec -T app php -r 'exit(filter_var(ini_get(\"display_errors\"),FILTER_VALIDATE_BOOL)?1:0);'"
+check "trusted proxies reach PHP and generated .env" "compose exec -T app sh -c 'test \"\$TRUSTED_PROXIES\" = \"172.21.0.0/16,192.168.1.10\" && grep -qx \"TRUSTED_PROXIES=172.21.0.0/16,192.168.1.10\" /var/www/html/.env && php -r '\''exit(getenv(\"TRUSTED_PROXIES\") === \"172.21.0.0/16,192.168.1.10\" ? 0 : 1);'\'''"
 
 echo "── Apache assertions ──"
 check "mod_rewrite enabled" "compose exec -T app apache2ctl -M 2>/dev/null | grep -q rewrite_module"
