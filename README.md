@@ -81,12 +81,36 @@ All settings are environment variables (the entrypoint writes the app's `.env` f
 | `APP_CANONICAL_URL` | _(empty)_ | Canonical URL for emails/redirects/robots. Set this behind a reverse proxy. |
 | `APP_DEBUG` / `DISPLAY_ERRORS` | `false` / `false` | Keep `false` in production. |
 | `FORCE_HTTPS` | `false` | Enforce HTTPS/HSTS (TLS detected via `X-Forwarded-Proto`). |
+| `TRUSTED_PROXIES` | _(empty)_ | Comma-separated exact IPs/CIDRs of reverse proxies allowed to supply the real client IP. |
 | `SESSION_LIFETIME` | `3600` | Session lifetime (seconds). |
 | `TZ` | `UTC` | Timezone for the in-container scheduler, so automatic emails fire at your library's local hours (see [Scheduled tasks](#scheduled-tasks)). |
 | `PINAKES_CRON_DISABLED` | `0` | Set to `1` to turn off the in-container scheduler (only if you run the cron scripts externally). |
 | `PLUGIN_ENCRYPTION_KEY` | auto | `base64:<32-byte key>` for encrypted plugin settings. **Set a stable value** so secrets survive container recreation. |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | _(empty)_ | Set **both** for a fully headless install (skips the wizard). |
 | `ADMIN_NAME` / `ADMIN_SURNAME` | `Admin` / `User` | Admin display name. |
+
+### Reverse proxy and client IPs
+
+Pinakes ignores `X-Forwarded-For`, `X-Real-IP` and similar headers unless the
+request's immediate peer matches `TRUSTED_PROXIES`. Configure the IP or CIDR of
+your nginx, Caddy, Traefik or other HTTP reverse proxy in `.env`, for example:
+
+```dotenv
+APP_CANONICAL_URL=https://library.example.com
+FORCE_HTTPS=true
+TRUSTED_PROXIES=172.21.0.4,10.20.0.0/24
+```
+
+The proxy must **overwrite** forwarded client-IP headers rather than preserve an
+unverified value supplied by the caller. Prefer the narrowest stable IP/CIDR and
+ensure the published Pinakes port is reachable only by that proxy. Do not add a
+Docker subnet merely because the application runs in Docker: Docker port
+forwarding is not an HTTP proxy and does not create `X-Forwarded-For`.
+
+`host.docker.internal` is likewise not a client-IP source; it identifies the
+host gateway and is not portable to every Docker setup. If Pinakes is exposed
+directly without an HTTP reverse proxy, leave `TRUSTED_PROXIES` empty and rely on
+the source address that reaches Apache.
 
 ### Headless vs. wizard
 
@@ -208,6 +232,7 @@ PINAKES_VERSION=0.7.22 tests/docker-smoke.sh   # build + full smoke test
 
 - Set strong `DB_PASS` / `DB_ROOT_PASS` and a stable `PLUGIN_ENCRYPTION_KEY` for production.
 - Terminate TLS at a reverse proxy and forward `X-Forwarded-Proto`; set `APP_CANONICAL_URL` and `FORCE_HTTPS=true`.
+- Set `TRUSTED_PROXIES` only to proxies that overwrite client-IP headers; never trust a broad Docker network while the app port is publicly reachable.
 - The application internals (`app/`, `config/`, `installer/`, `storage/`, `vendor/`) live outside the Apache `DocumentRoot` (`public/`) and are additionally denied by vhost rules.
 - `display_errors`/`expose_php` are off; uploads are capped at 512 MB.
 
