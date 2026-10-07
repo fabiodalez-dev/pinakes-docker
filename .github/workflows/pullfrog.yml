@@ -29,6 +29,14 @@ jobs:
   pullfrog:
     name: Pullfrog agent
     runs-on: ubuntu-latest
+    env:
+      # Whether a second subscription token is configured. Only the presence is
+      # hoisted to job level, not the token: a step-level `if:` cannot read the
+      # `secrets` context at all — GitHub refuses to parse the whole workflow
+      # with `Unrecognized named-value: 'secrets'` — while it does read `env`.
+      # The provider keys deliberately stay on the agent steps, so a token is
+      # never in the environment of the checkout or of the final `run:`.
+      HAS_OAUTH_FALLBACK: ${{ secrets.PULLFROG_OAUTH_FALLBACK != '' }}
     permissions:
       # The action mints a short-lived OIDC token to prove this run's identity
       # to Pullfrog's own token service, which is how a Router or subscription
@@ -54,6 +62,11 @@ jobs:
           # unauthenticated fetch works.
           persist-credentials: false
       - name: Run agent
+        id: agent
+        # Held back rather than fatal: a failure here is the cue for the
+        # fallback step below. The final step restores the failure when no
+        # attempt succeeded, so a genuinely broken review still reports red.
+        continue-on-error: true
         # Pinned to a commit SHA rather than the documented `@v0`, which is a
         # tag that MOVES — it has already advanced through ninety v0.1.x
         # releases. This is the one action here that runs an agent with access
@@ -127,3 +140,26 @@ jobs:
           # both limits are required — set them to the real limits of that model
           # OPENAI_COMPATIBLE_CONTEXT: "128000"
           # OPENAI_COMPATIBLE_MAX_OUTPUT: "16384"
+
+      # A per-account rate limit is not fixed by a second expression, only by a
+      # second attempt: the first credential has to be tried and seen to fail.
+      # Only the fallback token is passed here. If another provider were
+      # configured and usable, the step above would already have reached it —
+      # Pullfrog walks its credentials in order — so duplicating the whole set
+      # would widen the token surface without changing any outcome.
+      - name: Run agent with the fallback subscription token
+        id: agent_fallback
+        if: steps.agent.outcome == 'failure' && env.HAS_OAUTH_FALLBACK == 'true'
+        uses: pullfrog/pullfrog@0d318bef8c7cf7ae3f193ef32b2bc74e1d94b4d1 # v0.1.90
+        with:
+          prompt: ${{ inputs.prompt }}
+          push: disabled
+          shell: restricted
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.PULLFROG_OAUTH_FALLBACK }}
+
+      - name: Fail when no attempt succeeded
+        if: steps.agent.outcome == 'failure' && steps.agent_fallback.outcome != 'success'
+        run: |
+          echo "::error::The agent failed with the primary credential, and the fallback failed too or is not configured."
+          exit 1
