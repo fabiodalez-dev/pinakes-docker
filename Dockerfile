@@ -131,6 +131,7 @@ RUN set -eux; \
       /var/www/html/storage/tmp \
       /var/www/html/storage/plugins \
       /var/www/html/storage/rate_limits \
+      /var/www/html/storage/digital \
       /var/www/html/public/uploads/copertine \
       /var/www/html/public/uploads/autori \
       /var/www/html/public/uploads/events \
