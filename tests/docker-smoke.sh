@@ -98,9 +98,12 @@ mobile_active="$(q "SELECT is_active FROM plugins WHERE name='mobile-api'")"
 [ "${mobile_active:-0}" = "1" ] && ok "mobile-api plugin active" || ko "mobile-api plugin active (got '${mobile_active}')"
 
 echo "── writable runtime dirs ──"
-for d in storage storage/sessions storage/logs storage/cache storage/uploads storage/plugins public/uploads/copertine; do
+for d in storage storage/sessions storage/logs storage/cache storage/uploads storage/plugins storage/digital public/uploads/copertine; do
     check "writable: $d" "compose exec -T app sh -c 'test -w /var/www/html/$d'"
 done
+# Digital Library files live in storage/digital (Pinakes 0.8.6+): PHP runs as www-data
+# and must be able to write there, not just root.
+check "www-data can write storage/digital" "compose exec -T -u www-data app sh -c 'f=/var/www/html/storage/digital/.smoke-\$\$ && : > \$f && rm \$f'"
 
 echo "── scheduler (supercronic) ──"
 check "supercronic binary present" "compose exec -T app test -x /usr/local/bin/supercronic"
