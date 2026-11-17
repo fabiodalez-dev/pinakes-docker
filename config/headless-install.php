@@ -65,8 +65,17 @@ require $baseDir . '/installer/classes/Installer.php';
 
 $installer = new Installer($baseDir);
 
-// 1) Idempotency guard.
-if ($installer->isInstalled()) {
+// 1) Idempotency guard: the .installed lock file only.
+// Installer::isInstalled() also answers true for a .env whose database holds
+// tables (a web-request gate since Pinakes 0.9.6). Here .env is written by the
+// entrypoint and the lock lives in the container layer, so that broader answer
+// would skip the re-lock below after every container recreate and leave the
+// site on the wizard. hasLockFile() exists since 0.9.6; older releases only
+// have the lock-based isInstalled().
+$hasLock = method_exists($installer, 'hasLockFile')
+    ? $installer->hasLockFile()
+    : $installer->isInstalled();
+if ($hasLock) {
     out('Already installed (.installed present) — skipping.');
     exit(0);
 }
