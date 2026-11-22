@@ -70,6 +70,7 @@ mkdir -p \
     "$APP_DIR/storage/sessions" "$APP_DIR/storage/logs" "$APP_DIR/storage/cache" \
     "$APP_DIR/storage/backups" "$APP_DIR/storage/calendar" "$APP_DIR/storage/uploads" \
     "$APP_DIR/storage/tmp" "$APP_DIR/storage/plugins" "$APP_DIR/storage/rate_limits" \
+    "$APP_DIR/storage/digital" \
     "$APP_DIR/public/uploads/copertine" "$APP_DIR/public/uploads/autori" \
     "$APP_DIR/public/uploads/events" "$APP_DIR/public/uploads/digital" \
     "$APP_DIR/public/uploads/archives" \
